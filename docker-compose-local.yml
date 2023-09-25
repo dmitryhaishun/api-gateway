@@ -1,0 +1,218 @@
+version: '3.7'
+
+services:
+
+  api-gateway:
+    container_name: api-gateway
+    hostname: api-gateway
+    image: api-gateway
+    build:
+      context: .
+      dockerfile: ./docker/docker_local/Dockerfile.py-api-gateway
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - py-db
+      - api-gateway-redis
+    links:
+      - py-db
+      - api-gateway-redis
+    restart: always
+    networks:
+      - python-net
+    volumes:
+      - .:/app
+
+  api-gateway-worker:
+    container_name: api-gateway-worker
+    hostname: api-gateway-worker
+    image: api-gateway-worker
+    build:
+      context: .
+      dockerfile: ./docker/docker_local/Dockerfile.py-celery
+    env_file:
+      - .env
+    restart: always
+    command: celery -A app.celery.tasks worker -l info
+    depends_on:
+      - py-db
+      - api-gateway-redis
+    links:
+      - py-db
+      - api-gateway-redis
+    networks:
+      - python-net
+    volumes:
+      - .:/app
+
+  api-gateway-beat:
+    container_name: api-gateway-beat
+    hostname: api-gateway-beat
+    image: api-gateway-beat
+    build:
+      context: .
+      dockerfile: ./docker/docker_local/Dockerfile.py-celery-beat
+    env_file:
+      - .env
+    restart: always
+    command: celery -A app.celery.tasks beat -l info
+    depends_on:
+      - api-gateway
+      - api-gateway-redis
+      - api-gateway-worker
+    links:
+      - py-db
+      - api-gateway-redis
+      - api-gateway-worker
+    networks:
+      - python-net
+    volumes:
+      - .:/app
+
+  api-gateway-flower:
+    container_name: api-gateway-flower
+    hostname: api-gateway-flower
+    image: api-gateway-flower
+    build:
+      context: .
+      dockerfile: ./docker/docker_local/Dockerfile.py-flower
+    env_file:
+      - .env
+    restart: always
+    ports:
+      - '5555:5555'
+    command: celery -A app.celery.tasks flower --address=0.0.0.0
+    depends_on:
+      - api-gateway
+      - api-gateway-worker
+    links:
+      - api-gateway
+      - api-gateway-worker
+    networks:
+      - python-net
+    volumes:
+      - .:/app
+
+  api-gateway-consumer:
+    container_name: api-gateway-consumer
+    hostname: api-gateway-consumer
+    image: api-gateway-consumer
+    env_file:
+      - .env
+    build:
+      context: .
+      dockerfile: ./docker/docker_local/Dockerfile.py-consumer
+    depends_on:
+      - py-db
+      - api-gateway-redis
+      - kafka
+    links:
+      - py-db
+      - api-gateway-redis
+      - kafka
+    restart: always
+    networks:
+      - python-net
+    volumes:
+      - ./kafka_core:/app/kafka_core
+
+  py-db:
+    container_name: py-db
+    image: postgres:15-alpine
+    hostname: py-db
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_NAME=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    ports:
+      - "5434:5432"
+    networks:
+      - python-net
+    volumes:
+      - postgres_python_gateway:/var/lib/postgresql/data
+
+  api-gateway-redis:
+    image: redis:6.0
+    container_name: api-gateway-redis
+    hostname: api-gateway-redis
+    ports:
+      - "6381:6379"
+    networks:
+      - python-net
+    restart: always
+    volumes:
+      - gateway_redis_data:/var/lib/redis/data
+
+  zookeeper:
+      container_name: zookeeper
+      hostname: zookeeper
+      image: confluentinc/cp-zookeeper:7.3.2
+      environment:
+        ZOOKEEPER_CLIENT_PORT: 2181
+        ZOOKEEPER_TICK_TIME: 2000
+      ports:
+        - 22181:2181
+      networks:
+        - python-net
+      restart: always
+      volumes:
+        - zk_data:/var/lib/zookeeper/data
+        - zk_logs:/var/lib/zookeeper/log
+
+  kafka:
+    container_name: kafka
+    hostname: kafka
+    image: confluentinc/cp-kafka:7.3.2
+    ports:
+      - 9093:9093
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - python-net
+    depends_on:
+      - zookeeper
+    restart: always
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+ #web UI for viewing Kafka topics
+  kafdrop:
+    container_name: kafdrop
+    hostname: kafdrop
+    image: obsidiandynamics/kafdrop
+    restart: "no"
+    ports:
+      - "9000:9000"
+    environment:
+      KAFKA_BROKERCONNECT: "kafka:9092"
+    networks:
+      - python-net
+    depends_on:
+      - kafka
+
+networks:
+  python-net:
+    driver: bridge
+    name: python-net
+
+volumes:
+  postgres_python_gateway:
+  kafka_data:
+  zk_data:
+  zk_logs:
+  gateway_redis_data:

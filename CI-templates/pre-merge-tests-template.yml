@@ -1,0 +1,12 @@
+.pre-merge-tests-template:
+    image: $AND_DOCKER_PROXY_REGISTRY_NAME/python:3.11.2-slim
+    before_script:
+      - export  $(grep -v '^#' $AND_ENV_DEV | xargs -0) > /dev/null
+      - pip install --no-cache-dir poetry==1.2.2 && poetry config virtualenvs.create false
+      - poetry install --no-root
+    script:
+      - poetry run isort account/ user/ card/ deposit/ loan/ auth_user/ kafka_core/ tests/
+      - poetry run black account/ user/ card/ deposit/ loan/ auth_user/ kafka_core/ tests/
+      - poetry run flake8 account/ user/ card/ deposit/ loan/ auth_user/ kafka_core/ tests/
+      - poetry run mypy account/ user/ card/ deposit/ loan/ auth_user/ kafka_core/
+      - poetry run pytest -v -s

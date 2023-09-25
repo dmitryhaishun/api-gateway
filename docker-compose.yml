@@ -1,0 +1,142 @@
+version: '3.7'
+
+services:
+
+  api-gateway:
+    container_name: api-gateway
+    hostname: api-gateway
+    image: api-gateway
+    build:
+      context: .
+      dockerfile: ./docker/docker_local/Dockerfile.py-api-gateway
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - py-db
+      - api-gateway-redis
+    links:
+      - py-db
+      - api-gateway-redis
+    restart: always
+    networks:
+      - python-net
+    volumes:
+      - .:/app
+
+  api-gateway-worker:
+    container_name: api-gateway-worker
+    hostname: api-gateway-worker
+    image: api-gateway-worker
+    build:
+      context: .
+      dockerfile: ./docker/docker_local/Dockerfile.py-celery
+    env_file:
+      - .env
+    restart: always
+    command: celery -A app.celery.tasks worker -l info
+    depends_on:
+      - py-db
+      - api-gateway-redis
+    links:
+      - py-db
+      - api-gateway-redis
+    networks:
+      - python-net
+    volumes:
+      - .:/app
+
+  api-gateway-beat:
+    container_name: api-gateway-beat
+    hostname: api-gateway-beat
+    image: api-gateway-beat
+    build:
+      context: .
+      dockerfile: ./docker/docker_local/Dockerfile.py-celery-beat
+    env_file:
+      - .env
+    restart: always
+    command: celery -A app.celery.tasks beat -l info
+    depends_on:
+      - api-gateway
+      - api-gateway-redis
+      - api-gateway-worker
+    links:
+      - py-db
+      - api-gateway-redis
+      - api-gateway-worker
+    networks:
+      - python-net
+    volumes:
+      - .:/app
+
+  api-gateway-flower:
+    container_name: api-gateway-flower
+    hostname: api-gateway-flower
+    image: api-gateway-flower
+    build:
+      context: .
+      dockerfile: ./docker/docker_local/Dockerfile.py-flower
+    env_file:
+      - .env
+    restart: always
+    ports:
+      - '5555:5555'
+    command: celery -A app.celery.tasks flower --address=0.0.0.0
+    depends_on:
+      - api-gateway
+      - api-gateway-worker
+    links:
+      - api-gateway
+      - api-gateway-worker
+    networks:
+      - python-net
+    volumes:
+      - .:/app
+
+
+  py-db:
+    container_name: py-db
+    image: postgres:15-alpine
+    hostname: py-db
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_NAME=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    ports:
+      - "5434:5432"
+    networks:
+      - python-net
+    volumes:
+      - postgres_python_gateway:/var/lib/postgresql/data
+
+  api-gateway-redis:
+    image: redis:6.0
+    container_name: api-gateway-redis
+    hostname: api-gateway-redis
+    ports:
+      - "6381:6379"
+    networks:
+      - python-net
+    restart: always
+    volumes:
+      - gateway_redis_data:/var/lib/redis/data
+
+
+networks:
+  python-net:
+    driver: bridge
+    name: python-net
+
+volumes:
+  postgres_python_gateway:
+  gateway_redis_data:

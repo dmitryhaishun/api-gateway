@@ -1,0 +1,109 @@
+version: '3.7'
+
+services:
+
+
+  py-api-gateway:
+    container_name: py-api_gateway
+    hostname: py-api_gateway
+    image: $AND_DOCKER_REGISTRY_NAME/py-api-gateway:$CI_COMMIT_BRANCH
+    env_file:
+      - $AND_ENV_PROD
+    ports:
+      - "8000:8000"
+    volumes:
+      - py-static:/app/static/
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: "127.0.0.1:24224"
+        #fluentd-async-connect: "true"
+        tag: py-api-gateway
+    restart: always
+    networks:
+      - python-net
+
+  py-celery:
+      container_name: py-celery
+      hostname: py-celery
+      image: $AND_DOCKER_REGISTRY_NAME/py-celery:$CI_COMMIT_BRANCH
+      env_file:
+        - $AND_ENV_PROD
+      command: celery -A app.celery.tasks worker -l info
+      logging:
+        driver: fluentd
+        options:
+          fluentd-address: "127.0.0.1:24224"
+          #fluentd-async-connect: "true"
+          tag: py-celery
+      restart: always
+      depends_on:
+        - py-api-gateway
+      networks:
+        - python-net
+
+  py-celery-beat:
+      container_name: py-celery-beat
+      hostname: py-celery-beat
+      image: $AND_DOCKER_REGISTRY_NAME/py-celery-beat:$CI_COMMIT_BRANCH
+      env_file:
+        - $AND_ENV_PROD
+      command: celery -A app.celery.tasks beat -l info
+      logging:
+        driver: fluentd
+        options:
+          fluentd-address: "127.0.0.1:24224"
+          #fluentd-async-connect: "true"
+          tag: py-celery-beat
+      restart: always
+      depends_on:
+        - py-api-gateway
+      networks:
+        - python-net
+
+  py-flower:
+      container_name: py-flower
+      hostname: py-flower
+      image: $AND_DOCKER_REGISTRY_NAME/py-flower:$CI_COMMIT_BRANCH
+      env_file:
+        - $AND_ENV_PROD
+      ports:
+        - "5555:5555"
+      command: celery -A app.celery.tasks flower --address=0.0.0.0
+      logging:
+        driver: fluentd
+        options:
+          fluentd-address: "127.0.0.1:24224"
+          #fluentd-async-connect: "true"
+          tag: py-flower
+      restart: always
+      depends_on:
+        - py-api-gateway
+      networks:
+        - python-net
+
+  py-consumer:
+      container_name: py-consumer
+      hostname: py-consumer
+      image: $AND_DOCKER_REGISTRY_NAME/py-consumer:$CI_COMMIT_BRANCH
+      env_file:
+        - $AND_ENV_PROD
+      logging:
+        driver: fluentd
+        options:
+          fluentd-address: "127.0.0.1:24224"
+          #fluentd-async-connect: "true"
+          tag: py-consumer
+      restart: always
+      depends_on:
+        - py-api-gateway
+      networks:
+        - python-net
+
+
+networks:
+  python-net:
+    name: python-net
+    external: true
+volumes:
+  py-static:

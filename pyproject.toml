@@ -1,0 +1,62 @@
+[tool.poetry]
+name = "pyproject-tolm"
+version = "0.1.0"
+description = ""
+authors = ["gosuexp <gosuexp@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+django = "^4.2"
+djangorestframework = "^3.14.0"
+psycopg2-binary = "^2.9.6"
+isort = "^5.12.0"
+black = "^23.3.0"
+mypy = "^1.2.0"
+kafka-python = "^2.0.2"
+pytest = "^7.3.1"
+drf-spectacular = "^0.26.2"
+python-dotenv = "^1.0.0"
+pytest-django = "^4.5.2"
+flake8-annotations = "^3.0.0"
+flake8 = "^6.0.0"
+coverage = "^7.2.3"
+celery = "^5.2.7"
+redis = "^4.5.4"
+flower = "^1.2.0"
+djangorestframework-simplejwt = "^5.2.2"
+django-cors-headers = "^3.14.0"
+faker = "^18.7.0"
+pytest-lazy-fixture = "^0.6.3"
+django-redis = "^5.2.0"
+ipython = "^8.14.0"
+pillow = "^9.5.0"
+django-filter = "^23.2"
+requests = "^2.31.0"
+types-requests = "^2.31.0.1"
+types-urllib3 = "^1.26.25.13"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "app.settings"
+# -- recommended but optional:
+python_files = ["test_*.py", "*_test.py", "testing/python/*.py"]
+
+
+[tool.isort]
+profile = "black"
+line_length=120
+skip = ["migrations/*", "wsgi.py", "asgi.py", "urls.py" ]
+
+
+[tool.black]
+line_length = 120
+exclude = '''
+  urls.py
+'''
+
